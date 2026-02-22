@@ -1,0 +1,47 @@
+{{ define "main" }}
+<div class="container">
+  <article class="doc">
+    {{ if ne .RelPermalink "/doc/" }}
+    <nav class="breadcrumb">
+      <a href="{{ "/doc/" | relURL }}">Doc</a>
+      {{- range .Ancestors.Reverse -}}
+        {{- if and (ne .Kind "home") (ne .RelPermalink "/doc/") }} &gt; <a href="{{ .RelPermalink }}">{{ .Title }}</a>
+        {{- end -}}
+      {{- end }} &gt; {{ .Title }}
+    </nav>
+    {{ end }}
+
+    <header>
+      <h1>{{ .Title }}</h1>
+    </header>
+
+    {{ if and .TableOfContents (ne .RelPermalink "/doc/") }}
+    <nav class="toc">
+      <h2>Contents</h2>
+      {{ .TableOfContents }}
+    </nav>
+    {{ end }}
+
+    <div class="doc-content">
+      {{ .Content }}
+    </div>
+
+    {{ if .Pages }}
+    <ul class="doc-list">
+      {{ range .Pages.ByWeight }}
+      <li>
+        <a href="{{ .RelPermalink }}">{{ .Title }}</a>
+        {{ if .Pages }}
+        <ul class="doc-sublist">
+          {{ range .Pages.ByWeight }}
+          <li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>
+          {{ end }}
+        </ul>
+        {{ end }}
+      </li>
+      {{ end }}
+    </ul>
+    {{ end }}
+  </article>
+</div>
+{{ end }}
