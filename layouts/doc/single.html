@@ -1,0 +1,20 @@
+{{ define "main" }}
+<div class="container">
+  <article class="doc">
+    <nav class="breadcrumb">
+      <a href="{{ "/doc/" | relURL }}">Doc</a> &gt; {{ .Title }}
+    </nav>
+
+    {{ if .TableOfContents }}
+    <nav class="toc">
+      <h2>Contents</h2>
+      {{ .TableOfContents }}
+    </nav>
+    {{ end }}
+
+    <div class="doc-content">
+      {{ .Content }}
+    </div>
+  </article>
+</div>
+{{ end }}

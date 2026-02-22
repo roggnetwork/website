@@ -13,17 +13,13 @@
 
   .logo {
     margin: 0;
-    font-size: 1.5rem;
-    font-weight: 700;
+    font-size: 1.1rem;
+    font-weight: 400;
     color: $secondary;
 
     a {
       color: inherit;
       text-decoration: none;
-
-      &:hover {
-        color: $primary;
-      }
     }
   }
 
@@ -43,25 +39,18 @@
     a {
       color: $secondary;
       text-decoration: none;
-      font-weight: 500;
 
       &:hover {
-        color: $primary;
+        color: $black;
       }
     }
   }
 
-  // Mobile responsive
   @media (max-width: $breakpoint-md) {
-    .header-container {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: $spacing-sm;
-    }
-
-    nav ul {
-      flex-wrap: wrap;
-      gap: $spacing-sm;
+    nav {
+      ul {
+        gap: $spacing-sm;
+      }
     }
   }
 }

@@ -2,5 +2,19 @@ baseURL = 'https://bgpgg.org/'
 languageCode = 'en-us'
 title = 'bgpgg'
 
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+  [markup.goldmark.parser]
+    [markup.goldmark.parser.attribute]
+      block = true
+  [markup.tableOfContents]
+    endLevel = 3
+    startLevel = 2
+  [markup.highlight]
+    style = "nord"
+    noClasses = false
+
 [params]
   description = 'Fast and observable BGP'

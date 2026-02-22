@@ -1,20 +1,17 @@
 {{ define "main" }}
 <div class="container">
   <article class="news-article">
-    <header>
-      <time class="news-date" datetime="{{ .Date.Format "2006-01-02" }}">
-        {{ .Date.Format "2006-01-02" }}
-      </time>
-      <h1>{{ .Title }}</h1>
-    </header>
+    <nav class="breadcrumb">
+      <a href="{{ "/news/" | relURL }}">News</a> &gt; {{ .Title }}
+    </nav>
+
+    <time class="news-date" datetime="{{ .Date.Format "2006-01-02" }}">
+      {{ .Date.Format "2006-01-02" }}
+    </time>
 
     <div class="news-content">
       {{ .Content }}
     </div>
-
-    <nav class="news-nav">
-      <a href="/">Back to home</a>
-    </nav>
   </article>
 </div>
 {{ end }}
