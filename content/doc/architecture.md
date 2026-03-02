@@ -5,9 +5,7 @@ weight = 1
 
 ## Core Design
 
-Built for observability and performance. Async Rust with Tokio runtime. Each peer runs in an independent task - failures are isolated, sessions survive connection drops.
-
-Monitoring (gRPC API, BMP) runs separately from routing. You can query state without impacting packet forwarding.
+bgpgg is written in async Rust using Tokio. Each peer session runs in its own task. The management plane (gRPC API, BMP) is decoupled from the routing plane.
 
 ## Architecture
 
@@ -59,6 +57,7 @@ Server spawns peer tasks via `spawn_peer()`. Peers run forever (survive TCP fail
 ## Protocol Support
 
 - **RFC 1997** - BGP Communities Attribute
+- **RFC 2385** - Protection of BGP Sessions via the TCP MD5 Signature Option
 - **RFC 2918** - Route Refresh Capability for BGP-4
 - **RFC 4271** - A Border Gateway Protocol 4 (BGP-4)
 - **RFC 4360** - BGP Extended Communities Attribute
@@ -69,4 +68,5 @@ Server spawns peer tasks via `spawn_peer()`. Peers run forever (survive TCP fail
 - **RFC 7606** - Revised Error Handling for BGP UPDATE Messages
 - **RFC 7854** - BGP Monitoring Protocol (BMP)
 - **RFC 7911** - Advertisement of Multiple Paths in BGP (ADD-PATH)
+- **RFC 7947** - Internet Exchange BGP Route Server
 - **RFC 8092** - BGP Large Communities Attribute

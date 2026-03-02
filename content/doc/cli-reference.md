@@ -9,6 +9,12 @@ weight = 5
 bgpgg peer list                         # List all peers
 bgpgg peer show 192.168.1.1            # Show peer details
 bgpgg peer add 192.168.1.1 65001       # Add peer
+bgpgg peer add 192.168.1.1 65001 \
+  --port 1179 \
+  --max-prefix-limit 1000 \
+  --max-prefix-action discard \
+  --md5-key-file /etc/bgpgg/peer.key \ # TCP MD5 signature (RFC 2385)
+  --next-hop-self                       # Rewrite NEXT_HOP to local address
 bgpgg peer del 192.168.1.1             # Delete peer
 ```
 
