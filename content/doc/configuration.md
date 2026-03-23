@@ -30,6 +30,9 @@ connect-retry-secs: 30                # Optional: Connection retry interval (def
 cluster-id: "1.1.1.1"                 # Optional: Route reflector cluster ID (defaults to router-id)
 sys-name: "bgpgg router"              # Optional: BMP system name
 sys-descr: "BGP daemon"               # Optional: BMP system description
+llgr:                                 # Optional: RFC 9494 server-level LLGR (peers inherit)
+  enabled: true
+  stale-time: 0
 ```
 
 ### log_level
@@ -80,6 +83,12 @@ peers:
     enforce-first-as: true          # Optional: Enforce first AS in AS_PATH matches peer ASN (default: true)
     md5-key-file: ""                # Optional: Path to TCP MD5 key file RFC 2385 (chmod 600)
     next-hop-self: false            # Optional: Rewrite NEXT_HOP to local address when advertising (default: false)
+    graceful-shutdown: false         # Optional: RFC 8326 tag routes with GRACEFUL_SHUTDOWN community (default: false)
+    ttl-min: null                    # Optional: RFC 5082 GTSM minimum TTL (default: disabled)
+    llgr:                            # Optional: RFC 9494 Long-Lived Graceful Restart
+      enabled: true                  # Default: true
+      stale-time: 0                  # Long-lived stale time in seconds (24-bit max: 16777215)
+      afi-safis: []                  # AFI/SAFIs to enable LLGR for
 ```
 
 ### max_prefix
@@ -117,6 +126,40 @@ peers:
 ### next-hop-self
 
 When `true`, bgpgg rewrites the NEXT_HOP attribute to its own local address when advertising routes to this peer. Useful for iBGP peers that do not have a route to the original NEXT_HOP.
+
+### graceful-shutdown
+
+When `true`, bgpgg tags all outbound routes to this peer with the `GRACEFUL_SHUTDOWN` well-known community (`65535:0`) per RFC 8326. Enable this before taking a session down so that peers can prefer alternate paths during maintenance.
+
+### ttl-min
+
+RFC 5082 GTSM (Generalized TTL Security Mechanism). Sets the minimum acceptable TTL on incoming packets. Use `255` for directly connected peers, `254` for peers one hop away, etc. When unset, GTSM is disabled.
+
+```yaml
+peers:
+  - address: "192.168.1.1"
+    ttl-min: 255
+```
+
+### llgr
+
+RFC 9494 Long-Lived Graceful Restart. Extends graceful restart by keeping stale routes for a longer period after a peer goes down. Requires `graceful-restart` to be enabled.
+
+LLGR can be configured at the server level (all peers inherit) or per-peer (overrides server settings). Set `enabled: false` on a peer to explicitly disable even when server-level LLGR is configured.
+
+```yaml
+# Server-level (all peers inherit)
+llgr:
+  enabled: true
+  stale-time: 3600
+  afi-safis: ["ipv4-unicast"]
+
+peers:
+  - address: "192.168.1.1"
+    llgr:                          # Per-peer override
+      enabled: true
+      stale-time: 7200
+```
 
 ## BMP Configuration
 
