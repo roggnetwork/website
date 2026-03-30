@@ -73,4 +73,6 @@ Server spawns peer tasks via `spawn_peer()`. Each peer runs as a long-lived task
 - **RFC 8092** - BGP Large Communities Attribute
 - **RFC 8326** - Graceful BGP Session Shutdown
 - **RFC 5082** - The Generalized TTL Security Mechanism (GTSM)
+- **RFC 6811** - BGP Prefix Origin Validation (RPKI)
+- **RFC 8210** - The Resource Public Key Infrastructure (RPKI) to Router Protocol
 - **RFC 9494** - Long-Lived Graceful Restart for BGP

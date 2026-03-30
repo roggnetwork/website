@@ -89,6 +89,7 @@ peers:
       enabled: true                  # Default: true
       stale-time: 0                  # Long-lived stale time in seconds (24-bit max: 16777215)
       afi-safis: []                  # AFI/SAFIs to enable LLGR for
+    send-rpki-community: false       # Optional: Attach RPKI origin validation state extended community on export (default: false)
 ```
 
 ### max_prefix
@@ -160,6 +161,36 @@ peers:
       enabled: true
       stale-time: 7200
 ```
+
+### send-rpki-community
+
+When `true`, bgpgg attaches the RPKI Origin Validation State extended community (RFC 8097) to routes advertised to this peer. The community reflects the validation result from the local RPKI cache: Valid, Invalid, or NotFound. Requires at least one RPKI cache to be configured.
+
+## RPKI Configuration
+
+Optional. Connect to RPKI-to-Router (RTR) cache servers for BGP origin validation (RFC 6811, RFC 8210):
+
+```yaml
+rpki-caches:
+  - address: "10.0.0.2:323"           # Required: Cache address (host:port)
+    preference: 1                      # Optional: Preference tier, lower = preferred (default: 0)
+    transport: "tcp"                   # Optional: "tcp" (default) or "ssh"
+    ssh-username: "rpki"               # Required for SSH transport
+    ssh-private-key-file: "/etc/bgpgg/rpki.key"  # Required for SSH transport
+    ssh-known-hosts-file: "/etc/bgpgg/known_hosts"  # Optional for SSH transport
+    retry-interval: 600                # Optional: Override cache retry interval (seconds)
+    refresh-interval: 3600             # Optional: Override cache refresh interval (seconds)
+    expire-interval: 7200              # Optional: Override cache expire interval (seconds)
+```
+
+### preference
+
+RPKI caches are organized into preference tiers. Only caches in the lowest (most preferred) tier are active at startup. If all caches in the active tier go down, bgpgg fails over to the next tier.
+
+### transport
+
+- `tcp` - Plain TCP connection (default, port 323)
+- `ssh` - SSH transport (requires `ssh-username` and `ssh-private-key-file`)
 
 ## BMP Configuration
 

@@ -36,6 +36,24 @@ bgpgg global info                      # ASN, router-id, uptime
 bgpgg global summary                   # Statistics
 ```
 
+## RPKI Management
+
+```bash
+bgpgg rpki list                        # List configured RPKI caches and VRP counts
+bgpgg rpki add 10.0.0.2:323           # Add RPKI cache (TCP)
+bgpgg rpki add 10.0.0.2:22 \
+  --preference 5 \
+  --transport ssh \
+  --ssh-username rpki \
+  --ssh-private-key-file /etc/bgpgg/rpki.key \
+  --ssh-known-hosts-file /etc/bgpgg/known_hosts \
+  --retry-interval 600 \
+  --refresh-interval 3600 \
+  --expire-interval 7200
+bgpgg rpki del 10.0.0.2:323           # Remove RPKI cache
+bgpgg rpki validate 10.0.0.0/24 65001 # Validate prefix origin
+```
+
 ## Custom gRPC Address
 
 ```bash
