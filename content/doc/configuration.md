@@ -30,9 +30,13 @@ connect-retry-secs: 30                # Optional: Connection retry interval (def
 cluster-id: "1.1.1.1"                 # Optional: Route reflector cluster ID (defaults to router-id)
 sys-name: "bgpgg router"              # Optional: BMP system name
 sys-descr: "BGP daemon"               # Optional: BMP system description
+enhanced-rr-stale-ttl: 360            # Optional: RFC 7313 stale route TTL in seconds (default: 360)
 llgr:                                 # Optional: RFC 9494 server-level LLGR (peers inherit)
   enabled: true
   stale-time: 0
+bgp-ls:                               # Optional: RFC 9552 BGP Link-State
+  max-ls-entries: 0                    # Optional: Max BGP-LS NLRIs in Loc-RIB (default: 0, unlimited)
+  instance-id: 0                       # Optional: Instance ID for locally originated NLRIs (default: 0)
 ```
 
 ### log_level
@@ -160,6 +164,26 @@ peers:
     llgr:                          # Per-peer override
       enabled: true
       stale-time: 7200
+```
+
+### enhanced-rr-stale-ttl
+
+RFC 7313 Enhanced Route Refresh. Maximum time in seconds to retain stale routes after receiving a BoRR (Beginning of Route Refresh) message. If the peer does not send an EoRR (End of Route Refresh) within this time, stale routes are removed. Set to `null` to disable the timer (stale routes kept indefinitely until EoRR).
+
+### bgp-ls
+
+RFC 9552 BGP Link-State. Allows BGP to carry network topology information (nodes, links, prefixes) from IGP protocols. Enable on peers by adding AFI 16388 / SAFI 71 to their `afi-safis`.
+
+```yaml
+bgp-ls:
+  max-ls-entries: 10000
+  instance-id: 1
+
+peers:
+  - address: "192.168.1.1"
+    afi-safis:
+      - afi: 16388
+        safi: 71
 ```
 
 ### send-rpki-community
