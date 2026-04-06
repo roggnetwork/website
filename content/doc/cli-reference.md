@@ -54,6 +54,24 @@ bgpgg rpki del 10.0.0.2:323           # Remove RPKI cache
 bgpgg rpki validate 10.0.0.0/24 65001 # Validate prefix origin
 ```
 
+## BGP-LS Management
+
+```bash
+bgpgg global rib add-ls node \
+  --asn 65000 \
+  --router-id 10.0.0.1 \
+  --protocol ospfv2 \
+  --name "router1"                     # Add BGP-LS node NLRI
+bgpgg global rib del-ls node \
+  --asn 65000 \
+  --router-id 10.0.0.1 \
+  --protocol ospfv2                    # Delete BGP-LS node NLRI
+```
+
+Protocol IDs: `isis-l1`, `isis-l2`, `ospfv2`, `direct`, `static`, `ospfv3`
+
+Optional flags: `--identifier <uint64>` (BGP-LS identifier, default: 0)
+
 ## Custom gRPC Address
 
 ```bash
