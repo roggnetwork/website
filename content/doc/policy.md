@@ -3,70 +3,138 @@ title = 'Policy'
 weight = 4
 +++
 
-## Policy Configuration
+Policies decide which routes are accepted from a peer and which are advertised back. They live inside `service bgp { ... }` and reference reusable defined-sets (prefix lists, neighbor sets, AS-path patterns, communities).
 
-### Defined Sets
+## Defined Sets
 
-Building blocks for matching:
+```
+prefix-list internal-prefixes {
+  10.0.0.0/8
+  10.0.0.0/8 ge 16 le 24
+  192.168.0.0/16 exact
+}
 
-```yaml
-defined-sets:
-  prefix-sets:
-    - name: "internal-prefixes"
-      prefixes:
-        - prefix: "10.0.0.0/8"
-          masklength_range: "16..24"    # or "exact"
+neighbor-set upstream-neighbors {
+  192.168.1.1
+  192.168.1.2
+}
 
-  neighbor-sets:
-    - name: "upstream-neighbors"
-      neighbors:
-        - "192.168.1.1"
+as-path-set upstream-asns {
+  "^65001$"
+  "_65000_"
+}
 
-  as-path-sets:
-    - name: "upstream-asns"
-      patterns:                          # Regex patterns
-        - "^65001$"
+community-set no-export-communities {
+  65000:100
+  no-export
+}
 
-  community-sets:
-    - name: "no-export-communities"
-      communities:
-        - "65000:100"
-        - "NO_EXPORT"
+ext-community-set rt-set {
+  rt:65000:100
+}
+
+large-community-set lc-set {
+  65000:100:200
+}
 ```
 
-### Policy Definitions
+`prefix-list` entries can take an optional masklength qualifier:
 
-```yaml
-policy-definitions:
-  - name: "import-policy"
-    statements:
-      - name: "accept-internal"
-        conditions:
-          match-prefix-set:
-            set-name: "internal-prefixes"
-            match-option: "any"          # or "all", "invert"
-          match-neighbor-set:
-            set-name: "upstream-neighbors"
-            match-option: "any"
-          route-type: "ebgp"             # or "ibgp", "local"
-        actions:
-          accept: true
-          local-pref: 200
-          community:
-            operation: "add"              # or "remove", "replace"
-            communities:
-              - "65000:100"
+- `<prefix> exact` — match only the exact masklength.
+- `<prefix> ge N` / `le M` — match masklengths in the given range.
+
+## Policy Blocks
+
+The shorthand form covers the common case of "match a set, decide":
+
+```
+policy import-from-customer {
+  match internal-prefixes accept
+  default reject
+}
 ```
 
-### Match Options
+For richer logic, use `statement` blocks:
 
-- `any` - At least one element must match
-- `all` - All elements must match
-- `invert` - No elements must match
+```
+policy import-from-customer {
+  statement prefer-customer {
+    match prefix-set internal-prefixes
+    match neighbor-set upstream-neighbors invert
+    match rpki valid
+    set local-pref 200
+    set community add 65000:100
+    accept
+  }
+  statement drop-invalid {
+    match rpki invalid
+    reject
+  }
+  default reject
+}
+```
 
-### Action Types
+A policy is evaluated top to bottom; the first statement whose match clauses all hold decides the route. If no statement matches, the policy's `default` action applies.
 
-- `accept` / `reject` - Route decision
-- `local-pref` - Local preference
-- `med` - Multi-exit discriminator
-- `community` / `ext-community` / `large-community` - Community manipulation
+### Match Clauses
+
+| Clause | Description |
+|---|---|
+| `match prefix-set <name> [any\|all\|invert]` | Match against a `prefix-list`. |
+| `match neighbor-set <name> [any\|all\|invert]` | Match against a `neighbor-set`. |
+| `match as-path-set <name> [any\|all\|invert]` | Match against an `as-path-set`. |
+| `match community-set <name> [any\|all\|invert]` | Match against a `community-set`. |
+| `match ext-community-set <name> [any\|all\|invert]` | Match against an `ext-community-set`. |
+| `match large-community-set <name> [any\|all\|invert]` | Match against a `large-community-set`. |
+| `match prefix <CIDR>` | Inline prefix match. |
+| `match neighbor <addr>` | Inline neighbor match. |
+| `match has-asn <ASN>` | AS_PATH contains ASN. |
+| `match route-type <ebgp\|ibgp\|local>` | |
+| `match community <AA:NN>` | Inline community match. |
+| `match rpki <valid\|invalid\|not-found>` | RFC 8097 origin validation state. |
+| `match afi-safi <afi-safi>` | |
+| `match ls-nlri-type <type>` | BGP-LS NLRI type. |
+| `match ls-protocol-id <id>` | |
+| `match ls-instance-id <N>` | |
+| `match ls-node-as <ASN>` | |
+| `match ls-node-router-id <addr>` | |
+
+The `any` / `all` / `invert` modifier on set matches:
+
+- `any` (default) — at least one element matches.
+- `all` — every element matches.
+- `invert` — no element matches.
+
+### Set Clauses
+
+| Clause | Description |
+|---|---|
+| `set local-pref <N>` | Set LOCAL_PREF. |
+| `set local-pref force <N>` | Set LOCAL_PREF unconditionally. |
+| `set med <N>` | Set MED. |
+| `set med remove` | Strip MED. |
+| `set community <add\|remove\|replace> <AA:NN>...` | Edit COMMUNITIES. |
+| `set ext-community <add\|remove\|replace> <...>` | Edit extended communities. |
+| `set large-community <add\|remove\|replace> <GA:LD1:LD2>...` | Edit large communities. |
+| `set rpki-state <valid\|invalid\|not-found>` | Override RPKI state. |
+
+### Disposition
+
+Each statement ends with `accept` or `reject`. The policy's `default <accept|reject>` line decides routes not matched by any statement.
+
+## Attaching Policies
+
+Policies bind to a peer's address family:
+
+```
+peer 192.168.1.1 {
+  remote-as 65001
+
+  family ipv4 unicast {
+    import policy import-from-customer
+    export policy to-upstreams
+  }
+}
+```
+
+Each family takes one `import` and one `export` policy. Setting it again through `ggsh configure` replaces the previous binding.

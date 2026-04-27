@@ -5,223 +5,240 @@ weight = 3
 
 ## Configuration File
 
-bgpgg uses YAML for configuration. Default location: `/etc/bgpgg/config.yaml`
-
-Override with `-c` flag or `BGPGG_CONFIG_PATH` environment variable:
+bgpgg uses a custom configuration language stored in `rogg.conf`. The default path is `/etc/rogg/rogg.conf`. Override with `--config`:
 
 ```bash
-# Using -c flag
-bgpggd -c /path/to/custom-config.yaml
-
-# Using environment variable
-BGPGG_CONFIG_PATH=/path/to/custom-config.yaml bgpggd
+bgpggd --config /path/to/rogg.conf
 ```
 
-## Server Configuration
+The same file is read and rewritten by `ggsh` in [configure mode](/doc/cli-reference/#configure-mode). Each commit rotates the previous version into a numbered snapshot (`rogg.1.conf`, `rogg.2.conf`, ...) up to ten generations.
 
-```yaml
-asn: 65000                            # Required: Autonomous System Number
-router-id: "1.1.1.1"                  # Required: Router ID (IPv4 address)
-listen-addr: "0.0.0.0:179"            # Optional: BGP listen address (default: 0.0.0.0:179)
-grpc-listen-addr: "127.0.0.1:50051"   # Optional: gRPC API address (default: 127.0.0.1:50051)
-log-level: "info"                     # Optional: Log level (default: info)
-hold-time-secs: 180                   # Optional: BGP hold time (default: 180)
-connect-retry-secs: 30                # Optional: Connection retry interval (default: 30)
-cluster-id: "1.1.1.1"                 # Optional: Route reflector cluster ID (defaults to router-id)
-sys-name: "bgpgg router"              # Optional: BMP system name
-sys-descr: "BGP daemon"               # Optional: BMP system description
-enhanced-rr-stale-ttl: 360            # Optional: RFC 7313 stale route TTL in seconds (default: 360)
-llgr:                                 # Optional: RFC 9494 server-level LLGR (peers inherit)
-  enabled: true
-  stale-time: 0
-bgp-ls:                               # Optional: RFC 9552 BGP Link-State
-  max-ls-entries: 0                    # Optional: Max BGP-LS NLRIs in Loc-RIB (default: 0, unlimited)
-  instance-id: 0                       # Optional: Instance ID for locally originated NLRIs (default: 0)
+## Files and Paths
+
+| Path | Purpose |
+|---|---|
+| `/etc/rogg/rogg.conf` | Daemon configuration. Override with `bgpggd --config <path>` and `ggsh --config <path>`. |
+| `/etc/rogg/rogg.<N>.conf` | Snapshots rotated on commit, up to `.10`. |
+| `/etc/rogg/rogg.conf.lock` | Sibling lock file. ggsh holds an exclusive flock for the duration of a configure session; concurrent sessions and imperative gRPC writes are refused. |
+| `/run/rogg/bgpggd.json` | Daemon discovery file. Written by `bgpggd` after listeners bind; read by `ggsh` so the client can find the gRPC endpoint without flags. Override with `bgpggd --runtime-dir <dir>` and `ggsh --runtime-dir <dir>`. |
+| `${XDG_STATE_HOME:-$HOME/.local/state}/rogg/ggsh_history` | Per-user `ggsh` command history. |
+
+## Syntax
+
+```
+# Comments start with '#' and run to end of line.
+service <kind> {
+  <key> <value>
+  <block> <name> { ... }
+}
 ```
 
-### log_level
+- Whitespace and blank lines are insignificant; one statement per line.
+- Strings containing spaces or special characters must be double-quoted: `sys-descr "rogg edge router"`.
+- Boolean settings take the literal `true` or `false`.
+- A value of `service bgp { ... }` is the only currently supported service.
 
-- `error` - Only errors
-- `warn` - Warnings and errors
-- `info` - Informational messages, warnings, and errors
-- `debug` - Debug messages and above
-- `trace` - All messages including trace-level details
+## Server Settings
 
-### Environment Variables
+Top-level settings inside `service bgp { ... }`:
 
-Server configuration can be overridden using environment variables:
-
-- `BGPGG_CONFIG_PATH` - Config file path
-- `BGPGG_ASN` - Autonomous System Number
-- `BGPGG_ROUTER_ID` - Router ID (`router-id`)
-- `BGPGG_LISTEN_ADDR` - BGP listen address (`listen-addr`)
-- `BGPGG_GRPC_LISTEN_ADDR` - gRPC listen address (`grpc-listen-addr`)
-- `BGPGG_LOG_LEVEL` - Log level (`log-level`)
-- `BGPGG_HOLD_TIME_SECS` - BGP hold time (`hold-time-secs`)
-- `BGPGG_CONNECT_RETRY_SECS` - Connection retry interval (`connect-retry-secs`)
-
-## Peer Configuration
-
-Optional. Define BGP peers:
-
-```yaml
-peers:
-  - address: "192.168.1.1"          # Required: Peer IP address
-    asn: 65001                      # Optional: Peer ASN (for validation)
-    port: 179                       # Optional: BGP port (default: 179)
-    passive-mode: false             # Optional: Don't initiate connection (default: false)
-    idle-hold-time-secs: 30         # Optional: Idle hold time (default: 30)
-    damp-peer-oscillations: true    # Optional: Exponential backoff (default: true)
-    max-prefix:                     # Optional: Prefix limit
-      limit: 1000
-      action: "terminate"
-    graceful-restart:               # Optional: GR settings
-      enabled: true                 # Default: true
-      restart-time: 120             # GR time in seconds (default: 120, max: 4095)
-    rr-client: false                # Optional: Route Reflector client (default: false)
-    add-path-send: "disabled"       # Optional: Add-path send mode (default: disabled)
-    add-path-receive: false         # Optional: Accept multiple paths (default: false)
-    import-policy: []               # Optional: List of import policy names
-    export-policy: []               # Optional: List of export policy names
-    rs-client: false                # Optional: Route server client mode RFC 7947 (default: false)
-    enforce-first-as: true          # Optional: Enforce first AS in AS_PATH matches peer ASN (default: true)
-    md5-key-file: ""                # Optional: Path to TCP MD5 key file RFC 2385 (chmod 600)
-    next-hop-self: false            # Optional: Rewrite NEXT_HOP to local address when advertising (default: false)
-    graceful-shutdown: false         # Optional: RFC 8326 tag routes with GRACEFUL_SHUTDOWN community (default: false)
-    ttl-min: null                    # Optional: RFC 5082 GTSM minimum TTL (default: disabled)
-    llgr:                            # Optional: RFC 9494 Long-Lived Graceful Restart
-      enabled: true                  # Default: true
-      stale-time: 0                  # Long-lived stale time in seconds (24-bit max: 16777215)
-      afi-safis: []                  # AFI/SAFIs to enable LLGR for
-    send-rpki-community: false       # Optional: Attach RPKI origin validation state extended community on export (default: false)
+```
+service bgp {
+  asn 65000                          # Required: local ASN
+  router-id 1.1.1.1                  # Required: IPv4 router ID
+  listen-addr 0.0.0.0:179            # Optional: BGP listen address
+  grpc-listen-addr 127.0.0.1:50051   # Optional: ggsh/gRPC listen address
+  log-level info                     # Optional: error|warn|info|debug|trace
+  hold-time 180                      # Optional: BGP hold time (seconds)
+  connect-retry 30                   # Optional: connect retry interval (seconds)
+  cluster-id 1.1.1.1                 # Optional: route reflector cluster ID
+  sys-name "bgpgg router"            # Optional: BMP system name
+  sys-descr "BGP daemon"             # Optional: BMP system description
+  enhanced-rr-stale-ttl 360          # Optional: RFC 7313 stale TTL (seconds)
+}
 ```
 
-### max_prefix
+`asn`, `router-id`, `listen-addr`, and `grpc-listen-addr` cannot be changed at runtime — a commit that touches them is rejected. Restart the daemon to apply.
 
-- `terminate` - Drop the BGP session when limit is exceeded
-- `discard` - Silently ignore prefixes beyond the limit, keep session up
+## Peer Block
 
-### add-path-send
+```
+peer 192.168.1.1 {
+  remote-as 65001
+  port 179
+  passive false
+  idle-hold-time-secs 30
+  damp-peer-oscillations true
+  md5-key-file /etc/rogg/peer1.key
+  ttl-min 255
+  next-hop-self false
+  graceful-shutdown false
+  rr-client false
+  rs-client false
+  enforce-first-as true
+  send-rpki-community false
+  admin-down false
 
-- `disabled` - Send only the best path (default)
-- `all` - Advertise all available paths to the peer
-
-### rs-client
-
-Mark this peer as a route server client (RFC 7947). In route server mode, bgpgg forwards routes between clients without modifying AS_PATH or NEXT_HOP (transparency mode).
-
-Constraints:
-- A peer cannot be both `rr-client` and `rs-client`
-- `rs-client` is incompatible with `add-path-receive` (route server uses send-only ADD-PATH per RFC 7947)
-
-### enforce-first-as
-
-When `true` (default), bgpgg rejects UPDATE messages where the first AS in AS_PATH does not match the peer's configured ASN (RFC 4271 Section 6.3). Set to `false` to disable this check.
-
-### md5-key-file
-
-Path to a file containing the TCP MD5 key (RFC 2385). The file must be readable by the daemon and should be mode `600`. The key is read as a text string with leading/trailing whitespace trimmed.
-
-```yaml
-peers:
-  - address: "192.168.1.1"
-    md5-key-file: "/etc/bgpgg/peer1.key"
+  family ipv4 unicast {
+    import policy from-customers
+    export policy to-upstreams
+    max-prefix 1000 action terminate
+    add-path-send all
+  }
+}
 ```
 
-### next-hop-self
+The block header is the peer's IP address (IPv4 or IPv6). Use `interface <name>` together with an IPv6 link-local address to peer over an unnumbered link.
 
-When `true`, bgpgg rewrites the NEXT_HOP attribute to its own local address when advertising routes to this peer. Useful for iBGP peers that do not have a route to the original NEXT_HOP.
+| Key | Value | Description |
+|---|---|---|
+| `remote-as` | ASN | Required. Peer ASN. |
+| `port` | u16 | TCP port (default 179). |
+| `interface` | name | Outgoing interface for IPv6 link-local peers. |
+| `md5-key-file` | path | TCP MD5 key file (RFC 2385). Mode 600 recommended. |
+| `ttl-min` | u8 | RFC 5082 GTSM minimum TTL. |
+| `passive` | bool | Do not initiate connections. |
+| `next-hop-self` | bool | Rewrite NEXT_HOP to self when advertising. |
+| `rr-client` | bool | Treat peer as a route reflector client (RFC 4456). |
+| `rs-client` | bool | Treat peer as a route server client (RFC 7947). |
+| `graceful-shutdown` | bool | Tag outbound routes with GRACEFUL_SHUTDOWN community (RFC 8326). |
+| `enforce-first-as` | bool | Reject UPDATE if peer ASN is not first in AS_PATH (default `true`). |
+| `send-rpki-community` | bool | Attach RPKI Origin Validation State extended community (RFC 8097). |
+| `admin-down` | bool | Administratively disable the peer. |
+| `idle-hold-time-secs` | u64 | Idle hold time before retry. |
+| `delay-open-time-secs` | u64 | Delay before sending OPEN. |
+| `damp-peer-oscillations` | bool | Exponential backoff on flaps. |
+| `min-route-advertisement-interval-secs` | u64 | MRAI. |
+| `allow-automatic-stop` | bool | FSM `AutomaticStop` enabled. |
+| `send-notification-without-open` | bool | Send NOTIFICATION before OPEN. |
 
-### graceful-shutdown
+A peer cannot be both `rr-client` and `rs-client`. `rs-client` is also incompatible with receiving multiple paths (route servers use send-only ADD-PATH per RFC 7947).
 
-When `true`, bgpgg tags all outbound routes to this peer with the `GRACEFUL_SHUTDOWN` well-known community (`65535:0`) per RFC 8326. Enable this before taking a session down so that peers can prefer alternate paths during maintenance.
+### Family Block
 
-### ttl-min
+`family <afi> <safi> { ... }` enables an address family on a peer and attaches per-family directives. AFIs: `ipv4`, `ipv6`, `ls`. SAFIs: `unicast`, `multicast`.
 
-RFC 5082 GTSM (Generalized TTL Security Mechanism). Sets the minimum acceptable TTL on incoming packets. Use `255` for directly connected peers, `254` for peers one hop away, etc. When unset, GTSM is disabled.
+| Directive | Description |
+|---|---|
+| `import policy <name>` | Apply named policy to inbound updates. |
+| `export policy <name>` | Apply named policy to outbound updates. |
+| `max-prefix <N>` | Drop the session when more than N prefixes are received. |
+| `max-prefix <N> action discard` | Silently ignore prefixes beyond N, keep session up. |
+| `add-path-send all` | Advertise all available paths (RFC 7911). |
+| `add-path-send disabled` | Send only the best path (default). |
 
-```yaml
-peers:
-  - address: "192.168.1.1"
-    ttl-min: 255
+For BGP-LS, enable `family ls unicast` on the peer.
+
+## Originate
+
+Inject a static route into Loc-RIB:
+
+```
+service bgp {
+  ...
+  originate 10.0.0.0/24 nexthop 192.168.1.1
+  originate 2001:db8::/32 nexthop fe80::1
+}
 ```
 
-### llgr
+## RPKI Cache
 
-RFC 9494 Long-Lived Graceful Restart. Extends graceful restart by keeping stale routes for a longer period after a peer goes down. Requires `graceful-restart` to be enabled.
+Connect to RPKI-to-Router (RTR) caches for origin validation (RFC 6811, RFC 8210):
 
-LLGR can be configured at the server level (all peers inherit) or per-peer (overrides server settings). Set `enabled: false` on a peer to explicitly disable even when server-level LLGR is configured.
+```
+rpki-cache 10.0.0.2:323 {
+  preference 0
+  transport tcp
+  retry-interval 600
+  refresh-interval 3600
+  expire-interval 7200
+}
 
-```yaml
-# Server-level (all peers inherit)
-llgr:
-  enabled: true
-  stale-time: 3600
-  afi-safis: ["ipv4-unicast"]
-
-peers:
-  - address: "192.168.1.1"
-    llgr:                          # Per-peer override
-      enabled: true
-      stale-time: 7200
+rpki-cache rpki-cache.example.com:22 {
+  preference 1
+  transport ssh
+  ssh-username rpki
+  ssh-private-key-file /etc/rogg/rpki.key
+  ssh-known-hosts-file /etc/rogg/known_hosts
+}
 ```
 
-### enhanced-rr-stale-ttl
+Caches are organized into preference tiers. Only caches in the lowest tier are active at startup; if every cache in the active tier goes down, bgpgg fails over to the next tier. Per-peer `send-rpki-community true` attaches the validation result to outbound routes.
 
-RFC 7313 Enhanced Route Refresh. Maximum time in seconds to retain stale routes after receiving a BoRR (Beginning of Route Refresh) message. If the peer does not send an EoRR (End of Route Refresh) within this time, stale routes are removed. Set to `null` to disable the timer (stale routes kept indefinitely until EoRR).
+## BMP Server
 
-### bgp-ls
+Stream BGP events to an external BMP collector (RFC 7854):
 
-RFC 9552 BGP Link-State. Allows BGP to carry network topology information (nodes, links, prefixes) from IGP protocols. Enable on peers by adding AFI 16388 / SAFI 71 to their `afi-safis`.
-
-```yaml
-bgp-ls:
-  max-ls-entries: 10000
-  instance-id: 1
-
-peers:
-  - address: "192.168.1.1"
-    afi-safis:
-      - afi: 16388
-        safi: 71
+```
+bmp-server 127.0.0.1:11019 {
+  statistics-timeout 60
+}
 ```
 
-### send-rpki-community
+`statistics-timeout 0` disables the periodic statistics report.
 
-When `true`, bgpgg attaches the RPKI Origin Validation State extended community (RFC 8097) to routes advertised to this peer. The community reflects the validation result from the local RPKI cache: Valid, Invalid, or NotFound. Requires at least one RPKI cache to be configured.
+## BGP-LS
 
-## RPKI Configuration
+RFC 9552 BGP Link-State carries IGP topology information over BGP. Enable AF on each peer with `family ls unicast` and configure the global block:
 
-Optional. Connect to RPKI-to-Router (RTR) cache servers for BGP origin validation (RFC 6811, RFC 8210):
-
-```yaml
-rpki-caches:
-  - address: "10.0.0.2:323"           # Required: Cache address (host:port)
-    preference: 1                      # Optional: Preference tier, lower = preferred (default: 0)
-    transport: "tcp"                   # Optional: "tcp" (default) or "ssh"
-    ssh-username: "rpki"               # Required for SSH transport
-    ssh-private-key-file: "/etc/bgpgg/rpki.key"  # Required for SSH transport
-    ssh-known-hosts-file: "/etc/bgpgg/known_hosts"  # Optional for SSH transport
-    retry-interval: 600                # Optional: Override cache retry interval (seconds)
-    refresh-interval: 3600             # Optional: Override cache refresh interval (seconds)
-    expire-interval: 7200              # Optional: Override cache expire interval (seconds)
+```
+bgp-ls {
+  instance-id 1
+}
 ```
 
-### preference
+## Policy and Sets
 
-RPKI caches are organized into preference tiers. Only caches in the lowest (most preferred) tier are active at startup. If all caches in the active tier go down, bgpgg fails over to the next tier.
+See [Policy](/doc/policy/) for `policy`, `prefix-list`, `neighbor-set`, `as-path-set`, `community-set`, `ext-community-set`, and `large-community-set` blocks.
 
-### transport
+## Snapshots
 
-- `tcp` - Plain TCP connection (default, port 323)
-- `ssh` - SSH transport (requires `ssh-username` and `ssh-private-key-file`)
+Each commit through `ggsh` rotates the previous `rogg.conf` into `rogg.1.conf`, the prior `.1` into `.2`, and so on up to `.10`. List them with `ggsh show config history`.
 
-## BMP Configuration
+## Complete Example
 
-Optional. Monitor BGP with external collectors:
+```
+service bgp {
+  asn 65000
+  router-id 1.1.1.1
+  listen-addr 0.0.0.0:179
+  grpc-listen-addr 127.0.0.1:50051
+  log-level info
 
-```yaml
-bmp_servers:
-  - address: "127.0.0.1:11019" # Required if using BMP
-    statistics_timeout: 60     # Optional: Stats interval in seconds (0 to disable)
+  peer 192.168.1.1 {
+    remote-as 65001
+    md5-key-file /etc/rogg/peer1.key
+
+    family ipv4 unicast {
+      import policy from-customers
+      export policy to-upstreams
+      max-prefix 1000 action discard
+    }
+  }
+
+  peer fe80::1 {
+    remote-as 65002
+    interface eth0
+  }
+
+  originate 10.0.0.0/24 nexthop 192.168.1.1
+
+  rpki-cache 10.0.0.2:323 {
+    preference 0
+  }
+
+  bmp-server 127.0.0.1:11019 {
+    statistics-timeout 60
+  }
+
+  prefix-list customer-prefixes {
+    10.0.0.0/8
+    192.168.0.0/16
+  }
+
+  policy from-customers {
+    match customer-prefixes accept
+    default reject
+  }
+}
 ```
