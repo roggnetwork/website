@@ -1,79 +1,196 @@
 +++
-title = 'CLI Reference'
+title = 'ggsh Reference'
 weight = 5
 +++
 
-## Peer Management
+`ggsh` is the gg shell — an interactive tool for inspecting and reconfiguring a running `bgpggd`. It speaks gRPC to the daemon and also reads and writes `rogg.conf` directly when committing changes.
+
+## Invocation
 
 ```bash
-bgpgg peer list                         # List all peers
-bgpgg peer show 192.168.1.1            # Show peer details
-bgpgg peer add 192.168.1.1 65001       # Add peer
-bgpgg peer add 192.168.1.1 65001 \
-  --port 1179 \
-  --max-prefix-limit 1000 \
-  --max-prefix-action discard \
-  --md5-key-file /etc/bgpgg/peer.key \ # TCP MD5 signature (RFC 2385)
-  --next-hop-self                       # Rewrite NEXT_HOP to local address
-bgpgg peer del 192.168.1.1             # Delete peer
+ggsh                                       # Interactive
+ggsh show bgp summary                      # One-shot
+echo show bgp routes | ggsh                # Piped
 ```
 
-## Route Management
+By default, ggsh discovers the daemon's gRPC address from `/run/rogg/bgpggd.json` (the daemon's runtime status file). Override either side:
 
 ```bash
-bgpgg global rib show                  # Show all routes
-bgpgg global rib add 10.0.0.0/24 --nexthop 192.168.1.1
-bgpgg global rib add 10.0.0.0/24 --nexthop 192.168.1.1 \
-  --origin incomplete --as-path "100 200 300" \
-  --local-pref 150 --med 50 --community 65001:100
-bgpgg global rib del 10.0.0.0/24
+ggsh --bgpgg-addr http://192.168.1.1:50051 show bgp summary
+ggsh --runtime-dir /tmp/peer1-run show bgp summary
+ggsh --config /etc/rogg/rogg.conf            # Path used by configure mode
 ```
 
-## Server Information
+## Modes
+
+ggsh has three modes, shown in the prompt:
+
+| Prompt | Mode | Entered by |
+|---|---|---|
+| `ggsh>` | Operational | Default |
+| `ggsh(config)>` | Configure (root) | `configure` |
+| `ggsh(config-bgp)>` | Configure / BGP service | `service bgp` (from `(config)`) |
+
+`exit` (or Ctrl-D) pops one level. From `(config)`, `exit` discards the candidate and releases the configure lock. From operational, it quits ggsh.
+
+Tab completion and inline help are available at every level. Hitting Tab on a partial command lists valid continuations with help text.
+
+## Operational Commands
+
+```
+show bgp summary                        # Peer table overview
+show bgp info                           # Server info (ASN, router-id, uptime)
+show bgp peers                          # List peers
+show bgp peers <addr>                   # Peer detail
+show bgp peers <addr> in [afi safi]     # Adj-RIB-In for a peer
+show bgp peers <addr> out [afi safi]    # Adj-RIB-Out for a peer
+show bgp routes [afi safi]              # Loc-RIB
+show bgp routes <prefix>                # Routes for a specific prefix
+
+show rpki caches                        # RPKI cache status
+show rpki roa                           # ROA table
+show rpki validate <prefix> origin <asn>
+
+show config history                     # Stored config snapshots
+show version
+```
+
+AFIs accepted in show commands: `ipv4`, `ipv6`, `ls`. SAFIs: `unicast`, `multicast`.
+
+## Configure Mode
+
+Editing happens against an in-memory candidate copy of `rogg.conf`. `commit` validates, applies the new config to the running daemon, and atomically writes `rogg.conf` (rotating the prior version into `rogg.1.conf`). `exit` discards the candidate.
+
+While configure mode is active, ggsh holds an exclusive lock (`<config>.lock`) — concurrent `configure` sessions and imperative gRPC mutations are refused.
+
+```
+ggsh> configure
+ggsh(config)> service bgp
+ggsh(config-bgp)> asn 65000
+ggsh(config-bgp)> router-id 1.1.1.1
+ggsh(config-bgp)> peer 192.168.1.1 remote-as 65001
+ggsh(config-bgp)> peer 192.168.1.1 family ipv4 unicast import policy customers
+ggsh(config-bgp)> commit
+ggsh>
+```
+
+### Settings
+
+```
+asn <ASN>
+router-id <IPv4>
+listen-addr <host:port>
+grpc-listen-addr <host:port>
+log-level <error|warn|info|debug|trace>
+hold-time <seconds>
+connect-retry <seconds>
+cluster-id <IPv4>
+sys-name <string>
+sys-descr <string>
+enhanced-rr-stale-ttl <seconds>
+```
+
+### Originate
+
+```
+originate <prefix> nexthop <addr>
+```
+
+### Peer
+
+```
+peer <addr> remote-as <ASN>
+peer <addr> port <u16>
+peer <addr> interface <name>
+peer <addr> md5-key-file <path>
+peer <addr> ttl-min <u8>
+peer <addr> next-hop-self <bool>
+peer <addr> passive <bool>
+peer <addr> rr-client <bool>
+peer <addr> rs-client <bool>
+peer <addr> graceful-shutdown <bool>
+peer <addr> enforce-first-as <bool>
+peer <addr> send-rpki-community <bool>
+peer <addr> admin-down <bool>
+peer <addr> family <afi> <safi> import policy <name>
+peer <addr> family <afi> <safi> export policy <name>
+```
+
+### Policy and Sets
+
+```
+policy <name> match <set-name> <accept|reject>
+policy <name> default <accept|reject>
+prefix-list <name> <prefix>
+```
+
+### Service Blocks
+
+```
+bmp-server <host:port> statistics-timeout <seconds>
+
+rpki-cache <host:port> preference <u8>
+rpki-cache <host:port> transport <tcp|ssh>
+rpki-cache <host:port> ssh-username <user>
+rpki-cache <host:port> ssh-private-key-file <path>
+rpki-cache <host:port> ssh-known-hosts-file <path>
+rpki-cache <host:port> retry-interval <seconds>
+rpki-cache <host:port> refresh-interval <seconds>
+rpki-cache <host:port> expire-interval <seconds>
+
+bgp-ls instance-id <u64>
+```
+
+### Removing State
+
+`unset` mirrors the set surface and drops the value, an entry, or a whole block:
+
+```
+unset asn                             # Remove a top-level setting
+unset originate <prefix>              # Stop originating
+unset peer <addr>                     # Remove an entire peer
+unset peer <addr> remote-as           # Clear one peer setting
+unset peer <addr> family <afi> <safi> # Remove a family block
+unset policy <name>                   # Remove a policy
+unset prefix-list <name>              # Remove a prefix-list
+unset prefix-list <name> <prefix>     # Remove one entry
+unset bmp-server <addr>
+unset rpki-cache <addr>
+unset bgp-ls
+```
+
+### Inspection
+
+```
+show diff               # Candidate vs running config
+show running-config     # The committed, on-disk config
+show candidate          # The in-memory candidate (config-bgp only)
+```
+
+### Commit Constraints
+
+`asn`, `router-id`, `listen-addr`, and `grpc-listen-addr` cannot be changed at runtime. A commit that touches them returns an error; restart `bgpggd` after editing `rogg.conf` directly.
+
+## Scripting
+
+ggsh accepts commands as positional arguments or on stdin and exits with a non-zero status on parse or execution errors:
 
 ```bash
-bgpgg global info                      # ASN, router-id, uptime
-bgpgg global summary                   # Statistics
+ggsh show bgp summary
+echo show bgp routes | ggsh
+ggsh <<EOF
+configure
+service bgp
+peer 10.0.0.2 remote-as 65001
+peer 10.0.0.2 port 179
+commit
+exit
+exit
+EOF
 ```
 
-## RPKI Management
+Errors during interactive sessions print a message and continue; in one-shot mode they exit non-zero.
 
-```bash
-bgpgg rpki list                        # List configured RPKI caches and VRP counts
-bgpgg rpki add 10.0.0.2:323           # Add RPKI cache (TCP)
-bgpgg rpki add 10.0.0.2:22 \
-  --preference 5 \
-  --transport ssh \
-  --ssh-username rpki \
-  --ssh-private-key-file /etc/bgpgg/rpki.key \
-  --ssh-known-hosts-file /etc/bgpgg/known_hosts \
-  --retry-interval 600 \
-  --refresh-interval 3600 \
-  --expire-interval 7200
-bgpgg rpki del 10.0.0.2:323           # Remove RPKI cache
-bgpgg rpki validate 10.0.0.0/24 65001 # Validate prefix origin
-```
+## Files
 
-## BGP-LS Management
-
-```bash
-bgpgg global rib add-ls node \
-  --asn 65000 \
-  --router-id 10.0.0.1 \
-  --protocol ospfv2 \
-  --name "router1"                     # Add BGP-LS node NLRI
-bgpgg global rib del-ls node \
-  --asn 65000 \
-  --router-id 10.0.0.1 \
-  --protocol ospfv2                    # Delete BGP-LS node NLRI
-```
-
-Protocol IDs: `isis-l1`, `isis-l2`, `ospfv2`, `direct`, `static`, `ospfv3`
-
-Optional flags: `--identifier <uint64>` (BGP-LS identifier, default: 0)
-
-## Custom gRPC Address
-
-```bash
-bgpgg --addr http://192.168.1.1:50051 peer list
-```
+See [Configuration / Files and Paths](/doc/configuration/#files-and-paths) for `rogg.conf`, the daemon discovery file, and where ggsh stores its command history.

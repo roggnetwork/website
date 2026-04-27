@@ -10,7 +10,7 @@ bgpgg is written in async Rust using Tokio. Each peer session runs in its own ta
 ## Architecture
 
 ```text
-                        MgmtOp (from CLI/gRPC)
+                        MgmtOp (from ggsh / gRPC)
                                   |
                                   v
                          +------------------+
@@ -44,9 +44,9 @@ Server spawns peer tasks via `spawn_peer()`. Each peer runs as a long-lived task
 
 ## Components
 
-- **bgpggd** - BGP speaker daemon
-- **bgpgg** - CLI via gRPC
-- **BMP** - Streams BGP events to external collectors
+- **bgpggd** — BGP daemon. Reads `rogg.conf`, listens for peers and gRPC, streams to BMP.
+- **ggsh** — gg shell. Interactive and scripting client; speaks gRPC to `bgpggd` and rewrites `rogg.conf` on commit.
+- **BMP** — Streams BGP events to external collectors (RFC 7854).
 
 ## Routing Tables
 

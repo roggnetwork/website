@@ -7,17 +7,22 @@ weight = 2
 
 ### Pre-built Binaries
 
-Download the platform binary from https://github.com/bgpgg-org/bgpgg/releases
+Download the platform binary from https://github.com/bgpgg-org/bgpgg/releases. Each release ships two binaries:
+
+- `bgpggd` - the BGP daemon
+- `ggsh` - the gg shell, used to manage `bgpggd`
 
 ### From Source
 
-Requires Rust
+Requires Rust.
 
 ```bash
 git clone https://github.com/bgpgg-org/bgpgg.git
 cd bgpgg
 make
 ```
+
+Binaries land in `target/release/`.
 
 ### Docker
 
@@ -27,27 +32,39 @@ docker pull bgpgg/bgpgg
 
 ## Quick Start
 
-Create `config.yaml`:
+Create `rogg.conf`:
 
-```yaml
-asn: 65000
-router_id: "1.1.1.1"
-peers:
-  - address: "192.168.1.1"
-    asn: 65001
+```
+service bgp {
+  asn 65000
+  router-id 1.1.1.1
+  listen-addr 0.0.0.0:179
+
+  peer 192.168.1.1 {
+    remote-as 65001
+  }
+}
 ```
 
-Start the daemon:
+Start the daemon (defaults to `/etc/rogg/rogg.conf`):
 
 ```bash
-./bgpggd -c config.yaml
+./bgpggd --config rogg.conf
 ```
 
-Use the CLI:
+Use `ggsh` to query and manage the running daemon:
 
 ```bash
-./bgpgg peer list
-./bgpgg global rib show
+./ggsh show bgp summary
+./ggsh show bgp routes
+```
+
+Or open an interactive session:
+
+```bash
+./ggsh
+ggsh> show bgp summary
+ggsh> exit
 ```
 
 ## Docker
@@ -55,29 +72,22 @@ Use the CLI:
 Run with defaults:
 
 ```bash
-docker run -d --name bgpggd -p 1790:179 bgpgg/bgpgg
-```
-
-Configure via environment variables:
-
-```bash
-docker run -d --name bgpggd -p 1790:179 \
-  -e BGPGG_ASN=65001 \
-  -e BGPGG_ROUTER_ID=2.2.2.2 \
-  bgpgg/bgpgg
+docker run -d --name bgpggd -p 179:179 bgpgg/bgpgg
 ```
 
 Use a config file:
 
 ```bash
-docker run -d --name bgpggd -p 1790:179 \
-  -v $(pwd)/config.yaml:/config.yaml \
-  bgpgg/bgpgg -c /config.yaml
+docker run -d --name bgpggd -p 179:179 \
+  -v $(pwd)/rogg.conf:/etc/rogg/rogg.conf \
+  bgpgg/bgpgg
 ```
 
-Use the CLI:
+Use `ggsh` against the container:
 
 ```bash
-docker exec bgpggd bgpgg peer list
-docker exec bgpggd bgpgg global rib show
+docker exec bgpggd ggsh show bgp summary
+docker exec bgpggd ggsh show bgp routes
 ```
+
+For a multi-speaker example, see [`docker/docker-compose.yml`](https://github.com/bgpgg-org/bgpgg/blob/master/docker/docker-compose.yml).
