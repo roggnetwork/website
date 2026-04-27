@@ -217,15 +217,19 @@ main {
       border-radius: 3px;
     }
 
-    // Code blocks
+    // Code blocks. Match the chroma "nord" background so plain fenced
+    // blocks (no language tag) look the same as highlighted ones.
     pre {
       padding: 0.9rem;
       overflow-x: auto;
       margin-bottom: $spacing-xs;
       font-size: 0.85em;
+      background-color: #2e3440;
+      color: #d8dee9;
 
       code {
         background-color: transparent;
+        color: inherit;
         padding: 0;
       }
     }
