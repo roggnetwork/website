@@ -7,7 +7,7 @@ weight = 2
 
 ### Pre-built Binaries
 
-Download the platform binary from https://github.com/bgpgg-org/bgpgg/releases. Each release ships two binaries:
+Download the platform binary from https://github.com/roggnetwork/bgpgg/releases. Each release ships two binaries:
 
 - `bgpggd` - the BGP daemon
 - `ggsh` - the gg shell, used to manage `bgpggd`
@@ -17,7 +17,7 @@ Download the platform binary from https://github.com/bgpgg-org/bgpgg/releases. E
 Requires Rust.
 
 ```bash
-git clone https://github.com/bgpgg-org/bgpgg.git
+git clone https://github.com/roggnetwork/bgpgg.git
 cd bgpgg
 make
 ```
@@ -27,7 +27,7 @@ Binaries land in `target/release/`.
 ### Docker
 
 ```bash
-docker pull bgpgg/bgpgg
+docker pull roggnetwork/bgpgg
 ```
 
 ## Quick Start
@@ -72,7 +72,7 @@ ggsh> exit
 Run with defaults:
 
 ```bash
-docker run -d --name bgpggd -p 179:179 bgpgg/bgpgg
+docker run -d --name bgpggd -p 179:179 roggnetwork/bgpgg
 ```
 
 Use a config file:
@@ -80,7 +80,7 @@ Use a config file:
 ```bash
 docker run -d --name bgpggd -p 179:179 \
   -v $(pwd)/rogg.conf:/etc/rogg/rogg.conf \
-  bgpgg/bgpgg
+  roggnetwork/bgpgg
 ```
 
 Use `ggsh` against the container:
@@ -90,4 +90,4 @@ docker exec bgpggd ggsh show bgp summary
 docker exec bgpggd ggsh show bgp routes
 ```
 
-For a multi-speaker example, see [`docker/docker-compose.yml`](https://github.com/bgpgg-org/bgpgg/blob/master/docker/docker-compose.yml).
+For a multi-speaker example, see [`docker/docker-compose.yml`](https://github.com/roggnetwork/bgpgg/blob/master/docker/docker-compose.yml).

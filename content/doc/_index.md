@@ -1,5 +1,5 @@
 +++
-title = 'Documentation'
+title = 'bgpgg'
 +++
 
 Fast BGP written in Rust.

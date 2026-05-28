@@ -1,6 +1,6 @@
-baseURL = 'https://bgpgg.org/'
+baseURL = 'https://www.roggnetwork.com/'
 languageCode = 'en-us'
-title = 'bgpgg'
+title = 'rogg'
 
 [markup]
   [markup.goldmark]
